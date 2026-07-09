@@ -7,9 +7,9 @@ StopWhenUnneeded=yes
 Type=oneshot
 RemainAfterExit=yes
 
-ExecStart=/usr/bin/local/8bitdo-sleep-fix sleep
+ExecStart=/etc/scripts/8bitdo-sleep-fix sleep
 
-ExecStop=/usr/bin/local/8bitdo-sleep-fix wake
+ExecStop=/etc/scripts/8bitdo-sleep-fix wake
 
 SuccessExitStatus=0 1
 
