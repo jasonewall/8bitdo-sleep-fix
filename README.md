@@ -30,6 +30,6 @@ Only tested on bazzite so far.
    - PRODUCT_ID
    - IDLE_PRODUCT_ID
 3. Run `make install`. This will:
-   1. Copy 8bitdo-sleep-fix to /usr/bin/local
+   1. Copy 8bitdo-sleep-fix to /etc/scripts
    2. Setup 8bitdo-sleep-fix.service as the sleep hook to run the script
    3. enable the service and restart daemons for you.
