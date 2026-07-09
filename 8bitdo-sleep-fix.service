@@ -1,0 +1,17 @@
+[Unit]
+Description=8BitDo Automated Unbind and Settlement Fix (Variable Driven)
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+ExecStart=/usr/bin/local/8bitdo-sleep-fix sleep
+
+ExecStop=/usr/bin/local/8bitdo-sleep-fix wake
+
+SuccessExisStatus=0 1
+
+[Install]
+WantedBy=sleep.target

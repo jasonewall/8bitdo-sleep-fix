@@ -1,0 +1,82 @@
+#!/bin/sh
+
+# DO NOT EVER RAISE AN ERROR. This will abort the sleep cycle and you'll have to
+# restart the system via the power button.
+trap 'exit 0' EXIT TERM INT
+
+# Set the port to the one your controller is connected to.
+# You can find this by running:
+#    sudo dmesg | grep -i 8bit
+PORT="1-6"
+
+HUB="usb1"
+
+# Set the vendor and product ID for your controller.
+# You can find this by running:
+#    lsusb
+# make sure the controller is on when you do this so you get
+# the correct product IDs.
+# Run lsusb before and after you put the controller to sleep to get the correct IDs.
+# IDLE_PRODUCT_ID is the product ID of the controller when it is turned off.
+# We watch for this to know when the controller has been turned off and it is safe to enable wakeup
+# at the hub level. If you don't set this correctly, the controller will wake up the system immediately after sleep.
+VENDOR_ID=2dc8
+PRODUCT_ID=3106
+IDLE_PRODUCT_ID=3109
+
+case $1 in
+    sleep)
+        # turn off the controller automatically. this shortens our wait time before sleep
+        # and removes a manual step for the user.
+        if [ -d /sys/bus/usb/drivers/usb/$PORT ]; then
+            echo "Turning off controller on port $PORT"
+            echo "$PORT" > /sys/bus/usb/drivers/usb/unbind
+        fi
+
+        # at half second intervals, we wait 20 seconds for the controller to disconnect.
+        # If it doesn't, we just continue with the sleep cycle.
+        for i in $(seq 1 40); do
+            # check if the controller is still connected
+            if lsusb | grep -q "$VENDOR_ID:$IDLE_PRODUCT_ID"; then
+                echo "Controller disconnected."
+
+                # The idle device doesn't show up in lsusb until after the controller has powered down.
+
+                # wait a little longer in case there's a few more add/bind events from the idle device
+                # and we don't wake the system backup
+                sleep 1
+
+                break
+            fi
+
+            echo "Waiting for controller to disconnect..."
+            sleep 0.5
+        done
+
+        if [ -f /sys/bus/usb/drivers/$HUB/power/wakeup ]; then
+            echo "Enabling wakeup on hub $HUB"
+            echo "enabled" > /sys/bus/usb/drivers/$HUB/power/wakeup
+        fi
+
+        ;;
+
+    wake)
+
+        if [ -f /sys/bus/usb/drivers/$HUB/power/wakeup ]; then
+            echo "Disabling wakeup on hub $HUB"
+            echo "disabled" > /sys/bus/usb/drivers/$HUB/power/wakeup
+        fi
+
+        # rebind the controller to the USB driver so it can be used again.
+        # Gemeni insisted we needed this in case sleep was cancelled by a mouse move or something.
+        # I doubt this would successfully rebind the active controller.
+        if [ -d /sys/bus/usb/drivers/usb/$PORT ]; then
+            echo "Rebinding controller on port $PORT"
+            echo "$PORT" > /sys/bus/usb/drivers/usb/bind
+        fi
+
+        ;;
+
+esac
+
+echo "8bitdo sleep completed."
