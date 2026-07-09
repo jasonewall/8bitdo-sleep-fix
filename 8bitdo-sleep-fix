@@ -28,9 +28,13 @@ case $1 in
     sleep)
         # turn off the controller automatically. this shortens our wait time before sleep
         # and removes a manual step for the user.
-        if [ -d /sys/bus/usb/drivers/usb/$PORT ]; then
-            echo "Turning off controller on port $PORT"
-            echo "$PORT" > /sys/bus/usb/drivers/usb/unbind
+        if lsusb | grep -q "$VENDOR_ID:$PRODUCT_ID"; then
+            if [ -d /sys/bus/usb/drivers/usb/$PORT ]; then
+                echo "Turning off controller on port $PORT"
+                echo "$PORT" > /sys/bus/usb/drivers/usb/unbind
+            fi
+        else
+            echo "Controller not active on port $PORT; skipping unbind."
         fi
 
         # at half second intervals, we wait 20 seconds for the controller to disconnect.
