@@ -67,14 +67,6 @@ case $1 in
             echo "disabled" > /sys/bus/usb/devices/$HUB/power/wakeup
         fi
 
-        # rebind the controller to the USB driver so it can be used again.
-        # Gemeni insisted we needed this in case sleep was cancelled by a mouse move or something.
-        # I doubt this would successfully rebind the active controller.
-        if [ ! -d /sys/bus/usb/drivers/usb/$PORT ]; then
-            echo "Rebinding controller on port $PORT"
-            echo "$PORT" > /sys/bus/usb/drivers/usb/bind
-        fi
-
         ;;
 
 esac
