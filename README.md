@@ -18,16 +18,33 @@ On wake we:
 1. Disable usb wake at the hub level.
 2. Attempt to rebind the usb port (not sure if this is valueable yet)
 
-### Setup
+# Setup
 
 Only tested on bazzite so far.
 
-1. Clone the repo to some where in your home directory.
-2. Run `make setup` (or `./setup.sh`) to discover your controller's IDs and generate a local config file named `8bitdo-sleep-fix.env`.
-3. Review and adjust the values in `8bitdo-sleep-fix.env` if needed.
-4. Run `make install`. This will:
-   1. Copy the script to `/etc/scripts/8bitdo-sleep-fix`
-   2. Install the discovered values to `/etc/default/8bitdo-sleep-fix`
-   3. Set up `8bitdo-sleep-fix.service` as the sleep hook and enable it
+This is all run from the Terminal application in Bazzite's desktop mode. It will either be called Konsole (KDE) or Terminal (Gnome) depending on the desktop you chose for your Bazzite install.
 
-You can update the values later by editing `/etc/default/8bitdo-sleep-fix` and restarting the service with `sudo systemctl restart 8bitdo-sleep-fix.service`.
+My bazzite install came with all the dependencies (git and make) to get this to work so I'm assuming yours is the same. If you see an error like "command not found"... maybe it's time to update. I'm not really sure.
+
+Once you're in the terminal prompt type these commands:
+
+1. `git clone https://github.com/jasonewall/8bitdo-sleep-fix.git` - Clone this repository to your home directory. Terminal should start you off there. We're using a protocol here that does not require you to have a Git/GitHub account of your own.
+1. `cd 8bitdo-sleep-fix` - Changes to the new directory creatd by the clone operation.
+1. `make install`. Pay attention to the state it asks your controller to be in. Recording the states properly is important to get the shutdown to work. Also note it will prompt you for your password bazzite asked you to setup when you first installed it. It needs permissions to put files in spaces Linux considers sensitive, so the prompt is coming from Linux/Bazzite itself.
+
+That's it. You're done!
+
+Please note that this will wire up the sleep functionality to the specific port you have the dongle plugged into. If you need to change ports there's a command below to redetect the ports.
+
+If this is causing you issues you can disable it (see below command table).
+
+Make sure you're running these commands from the directory we just created. So if you're in a fresh terminal always run `cd 8bitdo-sleep-fix` first!
+
+| Command          | What It Do                                                                                                                                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make disable `  | Disables the sleep hook service without removing anything from your system.                                                                                                                                    |
+| `make enable`    | Re-enable the sleep hook after you've disabled it.                                                                                                                                                             |
+| `make uninstall` | Deletes the files from your system directories that were originally created by `make install`                                                                                                                  |
+| `make update`    | If there's changes to the scripts made this command will copy those changes to your system folder without needing to uninstall/install again. It will also skip the detect device ID step from a full install. |
+| `make detect`    | Rerun the detection step from the initial install without needing to do a full install. Run this if you change which port the dongle is plugged into.                                                          |
+| `make dump`      | Outputs some troubleshooting information. Please include a copy of this output when asking for help/reporting issues.                                                                                          |

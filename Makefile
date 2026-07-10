@@ -36,6 +36,7 @@ disable:
 
 .PHONY: uninstall
 uninstall: disable
+	sudo rm -f /etc/default/8bitdo-sleep-fix
 	sudo rm -f /etc/scripts/8bitdo-sleep-fix
 	sudo rm -f /etc/systemd/system/8bitdo-sleep-fix.service
 
