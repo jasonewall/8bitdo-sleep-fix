@@ -22,14 +22,12 @@ On wake we:
 
 Only tested on bazzite so far.
 
-1. Clone the repo to some where in your home directory
-2. Open 8bitdo-sleep-fix and set:
-   - PORT
-   - HUB
-   - VENDOR_ID
-   - PRODUCT_ID
-   - IDLE_PRODUCT_ID
-3. Run `make install`. This will:
-   1. Copy 8bitdo-sleep-fix to /etc/scripts
-   2. Setup 8bitdo-sleep-fix.service as the sleep hook to run the script
-   3. enable the service and restart daemons for you.
+1. Clone the repo to some where in your home directory.
+2. Run `make setup` (or `./setup.sh`) to discover your controller's IDs and generate a local config file named `8bitdo-sleep-fix.env`.
+3. Review and adjust the values in `8bitdo-sleep-fix.env` if needed.
+4. Run `make install`. This will:
+   1. Copy the script to `/etc/scripts/8bitdo-sleep-fix`
+   2. Install the discovered values to `/etc/default/8bitdo-sleep-fix`
+   3. Set up `8bitdo-sleep-fix.service` as the sleep hook and enable it
+
+You can update the values later by editing `/etc/default/8bitdo-sleep-fix` and restarting the service with `sudo systemctl restart 8bitdo-sleep-fix.service`.
