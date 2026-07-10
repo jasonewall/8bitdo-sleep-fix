@@ -7,7 +7,7 @@ trap 'exit 0' EXIT TERM INT
 # Set the port to the one your controller is connected to.
 # You can find this by running:
 #    sudo dmesg | grep -i 8bit
-CONFIG_FILE="${8BITDO_SLEEP_FIX_CONFIG_FILE:-/etc/default/8bitdo-sleep-fix}"
+CONFIG_FILE="${_8BITDO_SLEEP_FIX_CONFIG_FILE:-/etc/default/8bitdo-sleep-fix}"
 
 if [ -z "$PORT" ] || [ -z "$HUB" ] || [ -z "$VENDOR_ID" ] || [ -z "$PRODUCT_ID" ] || [ -z "$IDLE_PRODUCT_ID" ]; then
     echo "Missing 8BitDo configuration. Set PORT, HUB, VENDOR_ID, PRODUCT_ID, and IDLE_PRODUCT_ID in $CONFIG_FILE" >&2
