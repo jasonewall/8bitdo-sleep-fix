@@ -41,6 +41,5 @@ uninstall: disable
 
 .PHONY: dump
 dump:
-	sudo systemctl status 8bitdo-sleep-fix.service
-	sudo journalctl -u 8bitdo-sleep-fix.service -n 50 --no-pager
+	-sudo systemctl status 8bitdo-sleep-fix.service -n 50 --no-pager
 	cat /etc/default/8bitdo-sleep-fix
