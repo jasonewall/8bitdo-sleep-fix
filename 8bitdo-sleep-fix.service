@@ -6,6 +6,7 @@ StopWhenUnneeded=yes
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+EnvironmentFile=-/etc/default/8bitdo-sleep-fix
 
 ExecStart=/etc/scripts/8bitdo-sleep-fix sleep
 
