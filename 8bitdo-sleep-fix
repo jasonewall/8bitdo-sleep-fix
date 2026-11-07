@@ -9,58 +9,229 @@ trap 'exit 0' EXIT TERM INT
 #    sudo dmesg | grep -i 8bit
 CONFIG_FILE="${_8BITDO_SLEEP_FIX_CONFIG_FILE:-/etc/default/8bitdo-sleep-fix}"
 
-if [ -z "$PORT" ] || [ -z "$HUB" ] || [ -z "$VENDOR_ID" ] || [ -z "$PRODUCT_ID" ] || [ -z "$IDLE_PRODUCT_ID" ]; then
-    echo "Missing 8BitDo configuration. Set PORT, HUB, VENDOR_ID, PRODUCT_ID, and IDLE_PRODUCT_ID in $CONFIG_FILE" >&2
+# Backwards compatibility: old single-device config files.
+if [ -z "${DEVICE_COUNT:-}" ] && [ -n "${PORT:-}" ]; then
+    DEVICE_COUNT=1
+    DEVICE_1_PORT=$PORT
+    DEVICE_1_HUB=${HUB:-}
+    DEVICE_1_PRODUCT_ID=$PRODUCT_ID
+    DEVICE_1_IDLE_PRODUCT_ID=${IDLE_PRODUCT_ID:-}
+fi
+
+if [ -z "${DEVICE_COUNT:-}" ] || [ "${DEVICE_COUNT:-0}" -lt 1 ] 2>/dev/null; then
+    echo "Missing 8BitDo configuration. Run 'make detect' to generate $CONFIG_FILE" >&2
     exit 1
 fi
 
+# Read a per-device variable: devvar <index> <FIELD>
+devvar() {
+    eval "printf '%s' \"\${DEVICE_${1}_${2}:-}\""
+}
+
+# Print the USB devices (root hub + intermediate hubs) that lead to a port.
+# e.g. "7-1.4" -> "usb7 7-1"
+ancestors_of() {
+    port=$1
+    bus=${port%%-*}
+    rest=${port#*-}
+
+    echo "usb$bus"
+
+    oldifs=$IFS
+    IFS=.
+    set -- $rest
+    IFS=$oldifs
+
+    n=$#
+    i=1
+    acc=""
+    while [ $i -lt $n ]; do
+        eval "comp=\${$i}"
+        if [ -z "$acc" ]; then
+            acc=$comp
+        else
+            acc=$acc.$comp
+        fi
+        echo "$bus-$acc"
+        i=$((i + 1))
+    done
+}
+
+is_active() {
+    port=$1
+    pid=$2
+    [ -d "/sys/bus/usb/devices/$port" ] || return 1
+    [ "$(cat "/sys/bus/usb/devices/$port/idProduct" 2>/dev/null)" = "$pid" ]
+}
+
+is_settled() {
+    port=$1
+    pid=$2
+    idle=$3
+
+    [ -d "/sys/bus/usb/devices/$port" ] || return 0
+
+    cur=$(cat "/sys/bus/usb/devices/$port/idProduct" 2>/dev/null) || return 0
+
+    if [ "$idle" = "none" ] || [ -z "$idle" ]; then
+        [ "$cur" != "$pid" ]
+    else
+        [ "$cur" = "$idle" ]
+    fi
+}
+
 case $1 in
     sleep)
-        # turn off the controller automatically. this shortens our wait time before sleep
-        # and removes a manual step for the user.
-        if lsusb | grep -q "$VENDOR_ID:$PRODUCT_ID"; then
-            if [ -d /sys/bus/usb/drivers/usb/$PORT ]; then
-                echo "Turning off controller on port $PORT"
-                echo "$PORT" > /sys/bus/usb/drivers/usb/unbind
-            fi
-        else
-            echo "Controller not active on port $PORT; skipping unbind."
-        fi
+        # Only force-off controllers that have a known idle state (e.g. 2C).
+        # Controllers without an idle state (e.g. 3-Mode) are left bound so that
+        # they do not power-cycle during sleep and cause spurious wakeups.
+        i=1
+        while [ $i -le "$DEVICE_COUNT" ]; do
+            port=$(devvar "$i" PORT)
+            pid=$(devvar "$i" PRODUCT_ID)
+            idle=$(devvar "$i" IDLE_PRODUCT_ID)
 
-        # at half second intervals, we wait 20 seconds for the controller to disconnect.
-        # If it doesn't, we just continue with the sleep cycle.
-        for i in $(seq 1 40); do
-            # check if the controller is still connected
-            if lsusb | grep -q "$VENDOR_ID:$IDLE_PRODUCT_ID"; then
-                echo "Controller disconnected."
-
-                # The idle device doesn't show up in lsusb until after the controller has powered down.
-
-                # wait a little longer in case there's a few more add/bind events from the idle device
-                # and we don't wake the system backup
-                sleep 1
-
-                break
+            if [ "$idle" != "none" ] && [ -n "$idle" ]; then
+                if is_active "$port" "$pid"; then
+                    if [ -e "/sys/bus/usb/devices/$port/driver" ]; then
+                        echo "Turning off controller on port $port"
+                        echo "$port" > /sys/bus/usb/drivers/usb/unbind 2>/dev/null || true
+                    else
+                        echo "Controller on port $port already unbound; skipping."
+                    fi
+                else
+                    echo "Controller not active on port $port; skipping unbind."
+                fi
+            else
+                echo "Controller on port $port has no idle mode; leaving it bound."
             fi
 
-            echo "Waiting for controller to disconnect..."
-            sleep 0.5
+            i=$((i + 1))
         done
 
-        if [ -f /sys/bus/usb/devices/$HUB/power/wakeup ]; then
-            echo "Enabling wakeup on hub $HUB"
-            echo "enabled" > /sys/bus/usb/devices/$HUB/power/wakeup
+        # Wait up to 20 seconds for controllers with an idle mode to settle.
+        i=0
+        all_settled=0
+        has_idle=0
+        j=1
+        while [ $j -le "$DEVICE_COUNT" ]; do
+            idle=$(devvar "$j" IDLE_PRODUCT_ID)
+            if [ "$idle" != "none" ] && [ -n "$idle" ]; then
+                has_idle=1
+            fi
+            j=$((j + 1))
+        done
+
+        if [ "$has_idle" -eq 1 ]; then
+            while [ $i -lt 40 ]; do
+                all_settled=1
+                j=1
+                while [ $j -le "$DEVICE_COUNT" ]; do
+                    port=$(devvar "$j" PORT)
+                    pid=$(devvar "$j" PRODUCT_ID)
+                    idle=$(devvar "$j" IDLE_PRODUCT_ID)
+
+                    # Only idle-mode devices participate in the wait.
+                    if [ "$idle" != "none" ] && [ -n "$idle" ]; then
+                        if ! is_settled "$port" "$pid" "$idle"; then
+                            all_settled=0
+                        fi
+                    fi
+                    j=$((j + 1))
+                done
+
+                [ "$all_settled" -eq 1 ] && break
+
+                echo "Waiting for controllers to disconnect..."
+                sleep 0.5
+                i=$((i + 1))
+            done
+
+            if [ "$all_settled" -eq 1 ]; then
+                # Give the idle device a moment to finish (re)enumerating.
+                sleep 1
+            fi
+        else
+            all_settled=1
         fi
 
+        # Enable wakeup only on hubs that have at least one idle-mode controller
+        # that actually settled. This avoids spurious wakeups from controllers
+        # that power-cycle on their own during sleep.
+        hubs=""
+        enable_hub_wake=0
+        i=1
+        while [ $i -le "$DEVICE_COUNT" ]; do
+            port=$(devvar "$i" PORT)
+            idle=$(devvar "$i" IDLE_PRODUCT_ID)
+
+            if [ "$idle" != "none" ] && [ -n "$idle" ]; then
+                pid=$(devvar "$i" PRODUCT_ID)
+                if is_settled "$port" "$pid" "$idle"; then
+                    enable_hub_wake=1
+                    for a in $(ancestors_of "$port"); do
+                        case " $hubs " in
+                            *" $a "*) ;;
+                            *) hubs="$hubs $a" ;;
+                        esac
+                    done
+                fi
+            fi
+            i=$((i + 1))
+        done
+
+        if [ "$enable_hub_wake" -eq 1 ]; then
+            for h in $hubs; do
+                if [ -f "/sys/bus/usb/devices/$h/power/wakeup" ]; then
+                    echo "Enabling wakeup on hub $h"
+                    echo "enabled" > "/sys/bus/usb/devices/$h/power/wakeup" 2>/dev/null || true
+                fi
+            done
+        else
+            echo "No idle-mode controller settled; leaving hub wakeup disabled."
+        fi
+
+        # Also enable device-level wakeup where the dongle advertises support.
+        i=1
+        while [ $i -le "$DEVICE_COUNT" ]; do
+            port=$(devvar "$i" PORT)
+            if [ -f "/sys/bus/usb/devices/$port/power/wakeup" ]; then
+                echo "Enabling wakeup on device $port"
+                echo "enabled" > "/sys/bus/usb/devices/$port/power/wakeup" 2>/dev/null || true
+            fi
+            i=$((i + 1))
+        done
         ;;
 
     wake)
+        hubs=""
+        i=1
+        while [ $i -le "$DEVICE_COUNT" ]; do
+            port=$(devvar "$i" PORT)
+            for a in $(ancestors_of "$port"); do
+                case " $hubs " in
+                    *" $a "*) ;;
+                    *) hubs="$hubs $a" ;;
+                esac
+            done
+            i=$((i + 1))
+        done
 
-        if [ -f /sys/bus/usb/devices/$HUB/power/wakeup ]; then
-            echo "Disabling wakeup on hub $HUB"
-            echo "disabled" > /sys/bus/usb/devices/$HUB/power/wakeup
-        fi
+        for h in $hubs; do
+            if [ -f "/sys/bus/usb/devices/$h/power/wakeup" ]; then
+                echo "Disabling wakeup on hub $h"
+                echo "disabled" > "/sys/bus/usb/devices/$h/power/wakeup" 2>/dev/null || true
+            fi
+        done
 
+        i=1
+        while [ $i -le "$DEVICE_COUNT" ]; do
+            port=$(devvar "$i" PORT)
+            if [ -f "/sys/bus/usb/devices/$port/power/wakeup" ]; then
+                echo "disabled" > "/sys/bus/usb/devices/$port/power/wakeup" 2>/dev/null || true
+            fi
+            i=$((i + 1))
+        done
         ;;
 
 esac

@@ -30,7 +30,7 @@ Once you're in the terminal prompt type these commands:
 
 1. `git clone https://github.com/jasonewall/8bitdo-sleep-fix.git` - Clone this repository to your home directory. Terminal should start you off there. We're using a protocol here that does not require you to have a Git/GitHub account of your own.
 1. `cd 8bitdo-sleep-fix` - Changes to the new directory creatd by the clone operation.
-1. `make install`. Pay attention to the state it asks your controller to be in. Recording the states properly is important to get the shutdown to work. Also note it will prompt you for your password bazzite asked you to setup when you first installed it. It needs permissions to put files in spaces Linux considers sensitive, so the prompt is coming from Linux/Bazzite itself.
+1. `make install`. Turn **all** of the 8BitDo controllers you want to fix ON first, then (when prompted) turn them all OFF. Recording the states properly is important to get the shutdown to work. Also note it will prompt you for your password bazzite asked you to setup when you first installed it. It needs permissions to put files in spaces Linux considers sensitive, so the prompt is coming from Linux/Bazzite itself.
 
 That's it. You're done!
 
